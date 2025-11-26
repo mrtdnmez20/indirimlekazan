@@ -5,8 +5,8 @@ from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
 # Telegram bilgileri
-TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
-KANAL = os.environ['KANAL']
+TOKEN = os.environ['8515438168:AAEEgYfGV_0yF4ayUDj8NNO_ZJ7_60PVXwQ']
+KANAL = os.environ['@indirimlekazan']
 
 bot = Bot(token=TOKEN)
 updater = Updater(TOKEN, use_context=True)
