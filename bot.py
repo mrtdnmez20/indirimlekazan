@@ -16,7 +16,7 @@ KANAL = os.environ["KANAL"]
 
 async def start(update, context):
     await update.message.reply_text(
-        "Merhaba! Bana ürün linki gönder, ben de kanala foto + fiyat + butonlarla göndereyim."
+        "Merhaba! Ürün linkini gönder, ben de kanala foto + fiyat + butonlarla göndereyim."
     )
 
 
@@ -55,7 +55,39 @@ async def handle_link(update, context):
     text = update.message.text
 
     if "http" not in text:
-        await update.message.reply_text("Geçerli bir ürün linki göndermelisin.")
+        await update.message.reply_text("Geçerli bir ürün linki gönder.")
         return
 
-    title, price, img = scrape(te
+    title, price, img = scrape(text)
+
+    buttons = [
+        [
+            InlineKeyboardButton("Satın Al", url=text),
+            InlineKeyboardButton("Google'da Ara", url=f"https://www.google.com/search?q={title}")
+        ]
+    ]
+
+    markup = InlineKeyboardMarkup(buttons)
+
+    await context.bot.send_photo(
+        chat_id=KANAL,
+        photo=img,
+        caption=f"{title}\nFiyat: {price}\n\n{text}",
+        reply_markup=markup
+    )
+
+    await update.message.reply_text("Ürün kanala gönderildi 👍")
+
+
+async def main():
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
+
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
