@@ -1,97 +1,89 @@
 import os
 import requests
 from bs4 import BeautifulSoup
-from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters
+)
 
-# Environment değişkenleri
-TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
-KANAL = os.environ['KANAL']
-
-# Bot uygulaması
-app = ApplicationBuilder().token(TOKEN).build()
+TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+KANAL = os.environ["KANAL"]
 
 
-# /start komutu
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update, context):
     await update.message.reply_text(
-        "Merhaba! Ürün linkini bana gönder. Ürün fotoğrafı, fiyatı ve butonlarıyla beraber kanalına göndereceğim."
+        "Merhaba! Ürün linkini gönder, ben de kanala fotoğraf + fiyat + butonlarla göndereyim."
     )
 
 
-# Ürün bilgilerini çekme fonksiyonu
-def get_product_info(url):
+def scrape_product(url):
     headers = {"User-Agent": "Mozilla/5.0"}
-
     try:
         r = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # Başlık
-        title = soup.title.text.strip() if soup.title else "Ürün Başlığı Bulunamadı"
+        title = soup.title.text.strip() if soup.title else "Başlık bulunamadı"
 
-        # Fiyat
         price = None
         for tag in soup.find_all("span"):
             if "₺" in tag.text:
                 price = tag.text.strip()
                 break
         if not price:
-            price = "Fiyat Bulunamadı"
+            price = "Fiyat bulunamadı"
 
-        # Resim
         img = None
         for tag in soup.find_all("img"):
             src = tag.get("src")
             if src and ("product" in src or "media" in src):
                 img = src
                 break
-
         if not img:
-            img = "https://via.placeholder.com/300x300.png?text=Resim+Bulunamadı"
+            img = "https://via.placeholder.com/300?text=Resim+Bulunamadı"
 
         return title, price, img
 
     except Exception:
-        return "Ürün Bilgisi Alınamadı", "-", "https://via.placeholder.com/300x300.png?text=Hata"
+        return "Ürün alınamadı", "-", "https://via.placeholder.com/300?text=Hata"
 
 
-# Link mesajlarını yakalayıp kanala gönderme
-async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_link(update, context):
     url = update.message.text
 
     if "http" not in url:
-        await update.message.reply_text("Lütfen bir ürün linki gönder.")
+        await update.message.reply_text("Geçerli bir link gönder.")
         return
 
-    # Ürün bilgilerini al
-    title, price, img = get_product_info(url)
+    title, price, img = scrape_product(url)
 
-    # Butonlar
     keyboard = [
         [
             InlineKeyboardButton("Satın Al", url=url),
-            InlineKeyboardButton("Google'de Ara", url=f"https://www.google.com/search?q={title}")
+            InlineKeyboardButton("Google’da Ara", url=f"https://www.google.com/search?q={title}")
         ]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    markup = InlineKeyboardMarkup(keyboard)
 
-    # Kanala gönder
     await context.bot.send_photo(
         chat_id=KANAL,
         photo=img,
         caption=f"{title}\nFiyat: {price}\n\n{url}",
-        reply_markup=reply_markup
+        reply_markup=markup
     )
 
-    await update.message.reply_text("Ürün kanala gönderildi!")
+    await update.message.reply_text("Kanalına gönderildi 👍")
 
 
-# Handler kayıtları
-app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
-
-
-# Bot çalıştır
-if __name__ == "__main__":
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
     app.run_polling()
+
+
+if __name__ == "__main__":
+    main()
