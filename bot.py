@@ -5,7 +5,7 @@ from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandle
 # ========================
 # BOT AYARLARI
 # ========================
-BOT_TOKEN = "8184765049:AAGS-X9Qa829_kV7hiWFistjN3G3QdJs1SY"
+BOT_TOKEN = "8515438168:AAEEgYfGV_0yF4ayUDj8NNO_ZJ7_60PVXwQ"
 ADMIN_ID = 5250165372  # Senin Telegram ID'n
 TARGET_CHANNEL = "@indirimlekazan"  # Ana kanal
 
