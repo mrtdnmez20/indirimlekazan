@@ -1,3 +1,4 @@
+import re
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, filters, ContextTypes
@@ -9,18 +10,8 @@ BOT_TOKEN = "8515438168:AAEEgYfGV_0yF4ayUDj8NNO_ZJ7_60PVXwQ"
 ADMIN_ID = 5250165372  # Senin Telegram ID'n
 TARGET_CHANNEL = "@indirimlekazan"  # Ana kanal
 
-# Takip edilecek kanallar
-WATCH_CHANNELS = [
-    "@kazanindirimle",
-    "@indirimalarmiAmazon",
-    "@indirimalarmiTrendyol",
-    "@indirimalarmiHepsiburada",
-    "@indirimalarmiPazarama",
-    "@indirimalarmiElektronik",
-    "@indirimalarmiEvYasam",
-    "@enesozen",
-    "@indirimdeal"
-]
+# Sadece bu kanalı takip et
+WATCH_CHANNELS = ["@kazanindirimle"]
 
 # ========================
 # LOGGING
@@ -39,11 +30,20 @@ def google_link(text):
 # ========================
 async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.channel_post
-    text = message.text or message.caption or "Ürün açıklaması bulunamadı"
-    
-    g_link = google_link(text)
+    text = message.text or message.caption or ""
 
-    # ONAY / RED butonları
+    # Mesajdan ilk URL'yi al
+    url_match = re.search(r'(https?://\S+)', text)
+    if not url_match:
+        return  # URL yoksa görmezden gel
+
+    product_url = url_match.group(1)
+
+    # Başlığı al: linkin öncesi veya ilk satır
+    title = text.split("\n")[0][:150]  # 150 karakter
+
+    g_link = google_link(title)
+
     keyboard = InlineKeyboardMarkup([
         [
             InlineKeyboardButton("✔ ONAYLA", callback_data=f"ok|{message.chat_id}|{message.message_id}"),
@@ -51,10 +51,9 @@ async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     ])
 
-    # Admin'e DM gönder
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"🔔 *Yeni Ürün Yakalandı!*\n\n{text}\n\n🔎 [Google'da Ara]({g_link})",
+        text=f"🔔 *Yeni Ürün!*\n\n*{title}*\n{product_url}\n\n🔎 [Google'da Ara]({g_link})",
         reply_markup=keyboard,
         parse_mode="Markdown"
     )
