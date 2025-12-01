@@ -46,7 +46,7 @@ async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✔ ONAYLA", callback_data=f"ok|{message.chat_id}|{message.message_id}"),
+            InlineKeyboardButton("✔ ONAYLA", callback_data=f"ok|{title}|{product_url}"),
             InlineKeyboardButton("✖ SİL", callback_data="del")
         ]
     ])
@@ -69,19 +69,17 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ Ürün reddedildi.")
         return
 
-    _, chat_id, msg_id = query.data.split("|")
-    chat_id = int(chat_id)
-    msg_id = int(msg_id)
+    # ONAYLA butonu: title ve URL ile yeni mesaj gönder
+    _, title, product_url = query.data.split("|")
+    g_link = google_link(title)
 
-    try:
-        await context.bot.forward_message(
-            chat_id=TARGET_CHANNEL,
-            from_chat_id=chat_id,
-            message_id=msg_id
-        )
-        await query.edit_message_text("✔ Ürün onaylandı ve kanala gönderildi!")
-    except Exception as e:
-        await query.edit_message_text(f"Hata: {e}")
+    await context.bot.send_message(
+        chat_id=TARGET_CHANNEL,
+        text=f"🔔 *Yeni Ürün!*\n\n*{title}*\n{product_url}\n\n🔎 [Google'da Ara]({g_link})",
+        parse_mode="Markdown"
+    )
+
+    await query.edit_message_text("✔ Ürün onaylandı ve kanala gönderildi!")
 
 # ========================
 # BOTU BAŞLAT
