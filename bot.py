@@ -7,7 +7,7 @@ import hashlib
 # ========================
 # BOT AYARLARI
 # ========================
-BOT_TOKEN = "BOT_TOKENINIZ"
+BOT_TOKEN = "8515438168:AAEEgYfGV_0yF4ayUDj8NNO_ZJ7_60PVXwQ"
 ADMIN_ID = 5250165372
 TARGET_CHANNEL = "@indirimlekazan"
 WATCH_CHANNELS = ["@kazanindirimle"]
