@@ -2,52 +2,47 @@ import re
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+import hashlib
 
 # ========================
 # BOT AYARLARI
 # ========================
-BOT_TOKEN = "8515438168:AAEEgYfGV_0yF4ayUDj8NNO_ZJ7_60PVXwQ"
-ADMIN_ID = 5250165372  # Senin Telegram ID'n
-TARGET_CHANNEL = "@indirimlekazan"  # Ana kanal
-
-# Sadece bu kanalı takip et
+BOT_TOKEN = "BOT_TOKENINIZ"
+ADMIN_ID = 5250165372
+TARGET_CHANNEL = "@indirimlekazan"
 WATCH_CHANNELS = ["@kazanindirimle"]
 
-# ========================
-# LOGGING
-# ========================
 logging.basicConfig(level=logging.INFO)
 
-# ========================
-# GOOGLE ARAMA LINKİ
-# ========================
 def google_link(text):
     from urllib.parse import quote
     return f"https://www.google.com/search?q={quote(text)}"
 
-# ========================
+# ------------------------
 # YENİ MESAJI ADMİN'E GÖNDER
-# ========================
+# ------------------------
 async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.channel_post
-    text = message.text or message.caption or ""
+    if not message:
+        return
 
-    # Mesajdan ilk URL'yi al
+    text = message.text or message.caption or ""
     url_match = re.search(r'(https?://\S+)', text)
     if not url_match:
-        return  # URL yoksa görmezden gel
+        return
 
     product_url = url_match.group(1)
+    title = text.split("\n")[0][:100]
 
-    # Başlığı al: linkin öncesi veya ilk satır
-    title = text.split("\n")[0][:150]  # 150 karakter
+    # callback_data için kısa hash
+    callback_id = hashlib.md5(f"{title}{product_url}".encode()).hexdigest()
 
     g_link = google_link(title)
 
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✔ ONAYLA", callback_data=f"ok|{title}|{product_url}"),
-            InlineKeyboardButton("✖ SİL", callback_data="del")
+            InlineKeyboardButton("✔ ONAYLA", callback_data=f"ok|{callback_id}|{title}|{product_url}"),
+            InlineKeyboardButton("✖ SİL", callback_data=f"del|{callback_id}")
         ]
     ])
 
@@ -58,19 +53,18 @@ async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# ========================
+# ------------------------
 # BUTON İŞLEMLERİ
-# ========================
+# ------------------------
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data == "del":
+    if query.data.startswith("del"):
         await query.edit_message_text("❌ Ürün reddedildi.")
         return
 
-    # ONAYLA butonu: title ve URL ile yeni mesaj gönder
-    _, title, product_url = query.data.split("|")
+    _, callback_id, title, product_url = query.data.split("|")
     g_link = google_link(title)
 
     await context.bot.send_message(
@@ -81,16 +75,14 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.edit_message_text("✔ Ürün onaylandı ve kanala gönderildi!")
 
-# ========================
+# ------------------------
 # BOTU BAŞLAT
-# ========================
+# ------------------------
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Buton handler
     app.add_handler(CallbackQueryHandler(callback_handler))
 
-    # Kanal mesajlarını dinleme
     for ch in WATCH_CHANNELS:
         app.add_handler(MessageHandler(filters.Chat(username=ch) & filters.ALL, forward_to_admin))
 
