@@ -1,1 +1,5 @@
-python-telegram-bot==22.0
+python-telegram-bot==20.6
+feedparser
+requests
+beautifulsoup4
+aiosqlite
