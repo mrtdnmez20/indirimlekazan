@@ -1,106 +1,117 @@
-import re
+# bot.py
 import logging
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import re
+import feedparser
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-# ========================
-# BOT AYARLARI
-# ========================
-BOT_TOKEN = "8515438168:AAEEgYfGV_0yF4ayUDj8NNO_ZJ7_60PVXwQ"
-ADMIN_ID = 5250165372
-TARGET_CHANNEL = "@indirimlekazan"
-WATCH_CHANNELS = ["@kazanindirimle"]
+# -------------------------
+# Ayarlar
+# -------------------------
+TOKEN = "8515438168:AAEEgYfGV_0yF4ayUDj8NNO_ZJ7_60PVXwQ"
+ONAY_KANAL = 5250165372  # Onaya sunulacak kişi/chat ID
+KAYNAK_KANAL = "@kazanindirimle"
 
-logging.basicConfig(level=logging.INFO)
+# RSS/Feed kaynakları
+FEEDLER = [
+    "https://www.dhdeals.com/rss",  # Örnek
+    "https://trendyoldeals.com/rss",
+    "https://www.amazon.com.tr/buyuk-indirimler/rss",
+    "https://www.hepsiburada.com/rss/firsatlar"
+]
 
-# ========================
-# GOOGLE
-# ========================
-def google_link(text):
-    from urllib.parse import quote
-    return f"https://www.google.com/search?q={quote(text)}"
+# -------------------------
+# Logging
+# -------------------------
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
-# ========================
-# SAHTE PORT SERVER (Render için)
-# ========================
-def fake_server():
-    class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"Bot is running")
+# -------------------------
+# Ürün temizleme fonksiyonu
+# -------------------------
+def temizle(mesaj):
+    # Linkleri ayıkla
+    linkler = re.findall(r'http[s]?://\S+', mesaj)
+    # Başlığı çıkar
+    baslik = mesaj.split('\n')[0][:100]  # İlk satır başlık
+    # Yüzde indirim algılama
+    indirim = re.findall(r'\d{1,3}%', mesaj)
+    indirim = indirim[0] if indirim else ""
+    # Gereksiz emojileri temizle
+    mesaj = re.sub(r'[^\w\s%.-]', '', mesaj)
+    # Formatı hazırla
+    temiz_mesaj = f"{baslik} {indirim}\n{', '.join(linkler)}"
+    return temiz_mesaj
 
-    server = HTTPServer(("0.0.0.0", 10000), Handler)
-    server.serve_forever()
+# -------------------------
+# Onay için inline buton
+# -------------------------
+async def gonder_onay(update_or_bot, context, mesaj, chat_id=None):
+    keyboard = [
+        [InlineKeyboardButton("Paylaş", callback_data=f"paylas|{mesaj}")],
+        [InlineKeyboardButton("Reddet", callback_data="reddet")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    if chat_id:
+        await context.bot.send_message(chat_id=chat_id, text=mesaj, reply_markup=reply_markup)
+    else:
+        await update_or_bot.message.reply_text(mesaj, reply_markup=reply_markup)
 
-# Arka planda fake server başlat
-threading.Thread(target=fake_server, daemon=True).start()
-
-# ========================
-# ADMINE GÖNDER
-# ========================
-async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message = update.channel_post
-    text = message.text or message.caption or ""
-
-    url_match = re.search(r'(https?://\S+)', text)
-    if not url_match:
-        return
-
-    product_url = url_match.group(1)
-    title = text.split("\n")[0][:150]
-    g_link = google_link(title)
-
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✔ ONAYLA", callback_data=f"ok|{title}|{product_url}"),
-            InlineKeyboardButton("✖ SİL", callback_data="del")
-        ]
-    ])
-
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=f"🔔 *Yeni Ürün!*\n\n*{title}*\n{product_url}\n\n🔎 [Google'da Ara]({g_link})",
-        reply_markup=keyboard,
-        parse_mode="Markdown"
-    )
-
-# ========================
-# BUTON
-# ========================
-async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# -------------------------
+# Callback handler
+# -------------------------
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    data = query.data
 
-    if query.data == "del":
-        await query.edit_message_text("❌ Ürün reddedildi.")
-        return
+    if data.startswith("paylas|"):
+        mesaj = data.split("|", 1)[1]
+        await context.bot.send_message(chat_id=ONAY_KANAL, text=mesaj)
+        await query.edit_message_text(text=f"Paylaşıldı ✅\n\n{mesaj}")
+    elif data == "reddet":
+        await query.edit_message_text(text="Reddedildi ❌")
 
-    _, title, product_url = query.data.split("|")
-    g_link = google_link(title)
+# -------------------------
+# Kanal mesajlarını yakalama
+# -------------------------
+async def kanal_mesaj(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.chat.username == KAYNAK_KANAL.replace("@", ""):
+        temiz = temizle(update.message.text)
+        await gonder_onay(update, context, temiz)
 
-    await context.bot.send_message(
-        chat_id=TARGET_CHANNEL,
-        text=f"🔔 *Yeni Ürün!*\n\n*{title}*\n{product_url}\n\n🔎 [Google'da Ara]({g_link})",
-        parse_mode="Markdown"
-    )
+# -------------------------
+# RSS/Feed kontrol fonksiyonu
+# -------------------------
+async def feed_kontrol(context: ContextTypes.DEFAULT_TYPE):
+    for feed_url in FEEDLER:
+        feed = feedparser.parse(feed_url)
+        for entry in feed.entries[:5]:  # Son 5 ürünü al
+            mesaj = f"{entry.title}\n{entry.link}"
+            temiz = temizle(mesaj)
+            await gonder_onay(context.bot, context, temiz, chat_id=ONAY_KANAL)
 
-    await query.edit_message_text("✔ Ürün onaylandı ve kanala gönderildi!")
+# -------------------------
+# Bot başlat
+# -------------------------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Bot çalışıyor. Gelen ürünler onayına sunulacak.")
 
-# ========================
-# BOT BAŞLAT
-# ========================
-def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+# -------------------------
+# Main
+# -------------------------
+app = ApplicationBuilder().token(TOKEN).build()
 
-    app.add_handler(CallbackQueryHandler(callback_handler))
+# Komut ve handlerlar
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & filters.Chat(username=KAYNAK_KANAL.replace("@", "")), callback=kanal_mesaj))
+app.add_handler(CallbackQueryHandler(button))
 
-    for ch in WATCH_CHANNELS:
-        app.add_handler(MessageHandler(filters.Chat(username=ch) & filters.ALL, forward_to_admin))
+# Her 10 dakikada bir RSS/Feed kontrolü
+job_queue = app.job_queue
+job_queue.run_repeating(feed_kontrol, interval=600, first=10)
 
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+app.run_polling()
